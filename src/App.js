@@ -81,13 +81,16 @@ function App() {
   const [isPaused,        setIsPaused]        = useState(false);
 
   // Staking data
-  const [totalSupply,     setTotalSupply]     = useState('0');
-  const [myStaked,        setMyStaked]        = useState('0');
-  const [myEarned,        setMyEarned]        = useState('0');
-  const [rewardRate,      setRewardRate]      = useState('0');
-  const [periodFinish,    setPeriodFinish]    = useState('0');
-  const [rewardPeriod,    setRewardPeriod]    = useState('0');
-  const [currentAPY,      setCurrentAPY]      = useState('0');
+  const [totalSupply,          setTotalSupply]          = useState('0');
+  const [myStaked,             setMyStaked]             = useState('0');
+  const [myEarned,             setMyEarned]             = useState('0');
+  const [rewardRate,           setRewardRate]           = useState('0');
+  const [periodFinish,         setPeriodFinish]         = useState('0');
+  const [rewardPeriod,         setRewardPeriod]         = useState('0');
+  const [currentAPY,           setCurrentAPY]           = useState('0');
+  const [totalRewardForPeriod, setTotalRewardForPeriod] = useState('0');
+  const [contractBalance,      setContractBalance]      = useState('0');
+  const [totalClaimed,         setTotalClaimed]         = useState('0');
 
   // User inputs
   const [stakeAmount,     setStakeAmount]     = useState('');
@@ -204,17 +207,32 @@ function App() {
       const _rewardRate   = await _contract.rewardRate();
       const _periodFinish = await _contract.periodFinish();
       const _rewardPeriod = await _contract.rewardPeriod();
+      const _totalReward  = await _contract.totalRewardForPeriod();
+      const _totalClaimed = await _contract.totalClaimed();
 
-      setTotalSupply(ethers.utils.formatUnits(_totalSupply, 18));
+      const totalSupplyFormatted    = ethers.utils.formatUnits(_totalSupply, 18);
+      const totalRewardFormatted    = ethers.utils.formatUnits(_totalReward, 18);
+      const totalClaimedFormatted   = ethers.utils.formatUnits(_totalClaimed, 18);
+
+      setTotalSupply(totalSupplyFormatted);
       setMyStaked(ethers.utils.formatUnits(_myStaked, 18));
       setMyEarned(ethers.utils.formatUnits(_myEarned, 18));
       setRewardRate(ethers.utils.formatUnits(_rewardRate, 18));
       setPeriodFinish(_periodFinish.toString());
       setRewardPeriod(_rewardPeriod.toString());
+      setTotalRewardForPeriod(totalRewardFormatted);
+      setTotalClaimed(totalClaimedFormatted);
+
+      // Calculate remaining rewards
+      const remainingRewards = Math.max(0,
+        Number(totalRewardFormatted) -
+        Number(totalClaimedFormatted)
+      );
+      setContractBalance(remainingRewards.toString());
 
       // Calculate APY
       if (_totalSupply.gt(0) && _rewardRate.gt(0)) {
-        const rewardPerYear = _rewardRate.mul(365 * 24 * 3600);
+        const rewardPerYear = _rewardRate.mul(ethers.BigNumber.from('31536000'));
         const apy = rewardPerYear.mul(100).div(_totalSupply);
         setCurrentAPY(apy.toString());
       } else {
@@ -566,12 +584,13 @@ function App() {
           ) : (
             <>
               {/* STATS CARDS */}
-              <div className="grid grid-cols-4 gap-3 mb-8">
+              <div className="grid grid-cols-5 gap-3 mb-8">
                 {[
-                  { label: 'Total Staked',    value: formatTokens(totalSupply) + ' STK' },
-                  { label: 'Your Stake',      value: formatTokens(myStaked) + ' STK' },
-                  { label: 'Your Rewards',    value: formatTokens(myEarned) + ' STK' },
-                  { label: 'Current APY',     value: currentAPY + '%' },
+                  { label: 'Total Staked',             value: formatTokens(totalSupply) + ' STK' },
+                  { label: 'Your Stake',               value: formatTokens(myStaked) + ' STK' },
+                  { label: 'Your Rewards',             value: formatTokens(myEarned) + ' STK' },
+                  { label: 'Current APY',              value: currentAPY + '%' },
+                  { label: 'Total Period Rewards',     value: formatTokens(totalRewardForPeriod) + ' STK' },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl p-4 shadow-sm card-hover"
                     style={{
@@ -606,6 +625,9 @@ function App() {
                         <span style={{ color: '#dc2626' }}>● Ended</span>
                       )}
                     </p>
+                    <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+                      Contract Balance: <strong style={{ color: '#0ea5e9' }}>{formatTokens(contractBalance)} STK</strong>
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#64748b' }}>End Date</p>
@@ -615,7 +637,7 @@ function App() {
               </div>
 
               {/* MY STAKING POSITION */}
-              {Number(myStaked) > 0 && (
+              {(Number(myStaked) > 0 || Number(myEarned) > 0) && (
                 <div className="rounded-2xl p-6 mb-8 shadow-sm card-hover"
                   style={{
                     backgroundColor: 'rgba(255,255,255,0.6)',
@@ -626,10 +648,10 @@ function App() {
                   }}>
                   <h2 className="text-lg font-bold mb-4" style={{ color: '#0f4c5c' }}>My Staking Position</h2>
                   <StakingProgressBar
-                    staked={ethers.utils.parseUnits(myStaked, 18)}
+                    staked={ethers.utils.parseUnits(myStaked || '0', 18)}
                     totalSupply={ethers.utils.parseUnits(totalSupply || '0', 18)}
                   />
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-3 gap-3 mb-6">
                     <div>
                       <p className="text-xs uppercase tracking-wide" style={{ color: '#64748b' }}>Staked</p>
                       <p className="text-sm font-bold" style={{ color: '#0f4c5c' }}>{formatTokens(myStaked)} STK</p>
@@ -647,6 +669,33 @@ function App() {
                       </p>
                     </div>
                   </div>
+
+                  {/* UNSTAKE INPUT */}
+                  {Number(myStaked) > 0 && (
+                    <div className="flex gap-3 mb-4">
+                      <input
+                        type="number"
+                        placeholder="Amount to unstake"
+                        value={unstakeAmount}
+                        onChange={(e) => setUnstakeAmount(e.target.value)}
+                        className="flex-1 border rounded-xl px-4 py-3 text-sm outline-none"
+                        style={{ borderColor: '#bae6fd', color: '#334155' }}
+                      />
+                      <button
+                        onClick={() => setUnstakeAmount(myStaked)}
+                        disabled={isLoading}
+                        className="px-4 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 btn-hover"
+                        style={{
+                          backgroundColor: '#0ea5e9',
+                          opacity: isLoading ? 0.6 : 1,
+                          cursor: isLoading ? 'not-allowed' : 'pointer',
+                        }}>
+                        Max
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ACTION BUTTONS */}
                   <div className="flex gap-3">
                     <button
                       onClick={handleClaimReward}
@@ -659,20 +708,36 @@ function App() {
                       }}>
                       Claim Rewards
                     </button>
-                    <button
-                      onClick={handleUnstakeAndClaim}
-                      disabled={isLoading}
-                      className="px-5 py-2 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 btn-hover"
-                      style={{
-                        backgroundColor: '#f97316',
-                        opacity: isLoading ? 0.5 : 1,
-                        cursor: isLoading ? 'not-allowed' : 'pointer',
-                      }}>
-                      Unstake & Claim All
-                    </button>
+                    {Number(myStaked) > 0 && (
+                      <button
+                        onClick={handleUnstake}
+                        disabled={isLoading}
+                        className="px-5 py-2 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 btn-hover"
+                        style={{
+                          backgroundColor: '#f97316',
+                          opacity: isLoading ? 0.5 : 1,
+                          cursor: isLoading ? 'not-allowed' : 'pointer',
+                        }}>
+                        Unstake
+                      </button>
+                    )}
+                    {Number(myStaked) > 0 && (
+                      <button
+                        onClick={handleUnstakeAndClaim}
+                        disabled={isLoading}
+                        className="px-5 py-2 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 btn-hover"
+                        style={{
+                          backgroundColor: '#f97316',
+                          opacity: isLoading ? 0.5 : 1,
+                          cursor: isLoading ? 'not-allowed' : 'pointer',
+                        }}>
+                        Unstake & Claim All
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
+
 
               {/* STAKE */}
               <div className="rounded-2xl p-6 mb-8 shadow-sm card-hover"
@@ -710,50 +775,6 @@ function App() {
                     ⚠️ Staking is currently paused.
                   </p>
                 )}
-              </div>
-
-              {/* UNSTAKE */}
-              <div className="rounded-2xl p-6 mb-8 shadow-sm card-hover"
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.6)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(255,255,255,0.8)',
-                  borderLeft: '4px solid #f97316',
-                }}>
-                <h2 className="text-lg font-bold mb-4" style={{ color: '#0f4c5c' }}>Unstake Tokens</h2>
-                <div className="flex gap-3">
-                  <input
-                    type="number"
-                    placeholder="Amount to unstake"
-                    value={unstakeAmount}
-                    onChange={(e) => setUnstakeAmount(e.target.value)}
-                    className="flex-1 border rounded-xl px-4 py-3 text-sm outline-none"
-                    style={{ borderColor: '#bae6fd', color: '#334155' }}
-                  />
-                  <button
-                    onClick={() => setUnstakeAmount(myStaked)}
-                    disabled={isLoading}
-                    className="px-4 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 btn-hover"
-                    style={{
-                      backgroundColor: '#0ea5e9',
-                      opacity: isLoading ? 0.6 : 1,
-                      cursor: isLoading ? 'not-allowed' : 'pointer',
-                    }}>
-                    Max
-                  </button>
-                  <button
-                    onClick={handleUnstake}
-                    disabled={isLoading || isPaused}
-                    className="px-6 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 btn-hover"
-                    style={{
-                      backgroundColor: '#f97316',
-                      opacity: (isLoading || isPaused) ? 0.6 : 1,
-                      cursor: (isLoading || isPaused) ? 'not-allowed' : 'pointer',
-                    }}>
-                    Unstake
-                  </button>
-                </div>
               </div>
 
               {/* ADMIN PANEL */}
