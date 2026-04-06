@@ -84,13 +84,11 @@ function App() {
   const [totalSupply,           setTotalSupply]           = useState('0');
   const [myStaked,              setMyStaked]              = useState('0');
   const [myEarned,              setMyEarned]              = useState('0');
-  const [rewardRate,            setRewardRate]            = useState('0');
   const [periodFinish,          setPeriodFinish]          = useState('0');
   const [rewardPeriod,          setRewardPeriod]          = useState('0');
   const [currentAPY,            setCurrentAPY]            = useState('0');
   const [totalRewardForPeriod,  setTotalRewardForPeriod]  = useState('0');
   const [contractBalance,       setContractBalance]       = useState('0');
-  const [totalClaimed,          setTotalClaimed]          = useState('0');
   const [currentBlockTimestamp, setCurrentBlockTimestamp] = useState(0);
 
   // User inputs
@@ -202,24 +200,19 @@ function App() {
       const _totalSupply  = await _contract.totalSupply();
       const _myStaked     = await _contract.balanceOf(_account);
       const _myEarned     = await _contract.earned(_account);
-      const _rewardRate   = await _contract.rewardRate();
       const _periodFinish = await _contract.periodFinish();
       const _rewardPeriod = await _contract.rewardPeriod();
       const _totalReward  = await _contract.totalRewardForPeriod();
-      const _totalClaimed = await _contract.totalClaimed();
 
       const totalSupplyFormatted    = ethers.utils.formatUnits(_totalSupply, 18);
       const totalRewardFormatted    = ethers.utils.formatUnits(_totalReward, 18);
-      const totalClaimedFormatted   = ethers.utils.formatUnits(_totalClaimed, 18);
 
       setTotalSupply(totalSupplyFormatted);
       setMyStaked(ethers.utils.formatUnits(_myStaked, 18));
       setMyEarned(ethers.utils.formatUnits(_myEarned, 18));
-      setRewardRate(ethers.utils.formatUnits(_rewardRate, 18));
       setPeriodFinish(_periodFinish.toString());
       setRewardPeriod(_rewardPeriod.toString());
       setTotalRewardForPeriod(totalRewardFormatted);
-      setTotalClaimed(totalClaimedFormatted);
 
       // Calculate remaining rewards
       const remainingRewards = Math.max(0,
